@@ -96,6 +96,7 @@ node tools/cleanhome.js renew
 
 | Befehl | Wozu |
 |---|---|
+| `node tools/cleanhome.js connect` | Nur Developer-Mode-Verbindung einrichten und installieren (z. B. wenn `setup` bei Schritt 5 abbrach). |
 | `node tools/cleanhome.js sync` | Neue App installiert? Liste und Icons neu holen und CleanHome aktualisieren. |
 | `node tools/cleanhome.js uninstall` | CleanHome entfernen. Der TV ist danach wie vorher. |
 | `node tools/cleanhome.js status` | Zeigt gekoppelten TV und Stand der App-Liste. |

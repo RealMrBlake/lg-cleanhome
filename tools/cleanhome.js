@@ -4,6 +4,7 @@
  *
  *   node tools/cleanhome.js setup <TV-IP>    alles: koppeln, Apps lesen, bauen, installieren, starten
  *   node tools/cleanhome.js sync  [TV-IP]    nur die App-Liste und Icons neu vom TV holen (z. B. nach neuer App)
+ *   node tools/cleanhome.js connect [TV-IP]  nur Developer-Mode-Verbindung einrichten und installieren
  *   node tools/cleanhome.js build            nur das .ipk bauen (dist/)
  *   node tools/cleanhome.js install          gebautes .ipk installieren und starten
  *   node tools/cleanhome.js uninstall        CleanHome vom TV entfernen
@@ -232,17 +233,77 @@ function build() {
   return path.join(DIST, ipk);
 }
 
-function setupDevice(host) {
+function ask(question) {
+  const rl = require('readline').createInterface({ input: process.stdin, output: process.stdout });
+  return new Promise((resolve) => rl.question(question, (a) => { rl.close(); resolve(a.trim()); }));
+}
+
+// Holt den SSH-Schlüssel vom Key Server der Developer-Mode-App (http://TV:9991/webos_rsa).
+// Selbst gemacht statt "ares-novacom --getkey", damit klar wird, woran es scheitert.
+function fetchKey(host) {
+  return new Promise((resolve) => {
+    const req = http.get({ host, port: 9991, path: '/webos_rsa', timeout: 6000 }, (res) => {
+      const chunks = [];
+      res.on('data', (c) => chunks.push(c));
+      res.on('end', () => resolve({ status: res.statusCode, body: Buffer.concat(chunks).toString('utf8') }));
+    });
+    req.on('timeout', () => { req.destroy(); resolve({ error: 'timeout' }); });
+    req.on('error', (e) => resolve({ error: e.code || e.message }));
+  });
+}
+
+function sshQuick(cmd) {
+  const bin = path.join(ROOT, 'node_modules', '.bin', 'ares-novacom' + (process.platform === 'win32' ? '.cmd' : ''));
+  const r = spawnSync(bin, ['--device', DEVICE, '--run', cmd], { shell: process.platform === 'win32', timeout: 30000 });
+  return { ok: r.status === 0, out: String(r.stdout || '') + String(r.stderr || '') };
+}
+
+async function setupDevice(host) {
   say('\n⑤ Developer-Mode-Verbindung einrichten …');
   const info = ['-i', 'host=' + host, '-i', 'port=9922', '-i', 'username=prisoner', '-i', 'default=true'];
   // Erst ändern versuchen (falls schon vorhanden), sonst neu anlegen.
   const quiet = { stdio: 'ignore' };
   if (ares('ares-setup-device', ['-m', DEVICE].concat(info), quiet) === null &&
-      ares('ares-setup-device', ['-a', DEVICE].concat(info)) === null) fail('Gerät konnte nicht eingetragen werden.');
-  say('  Öffne am TV die App "Developer Mode": dort stehen "Passphrase" (6 Zeichen) und der Schalter "Key Server".');
-  say('  "Key Server" muss AN sein. Gleich wirst du nach der Passphrase gefragt.');
-  if (ares('ares-novacom', ['--device', DEVICE, '--getkey']) === null) {
-    fail('SSH-Schlüssel nicht abgeholt. Prüfe: Developer Mode an, Key Server an, Passphrase richtig (Groß/Klein).');
+      ares('ares-setup-device', ['-a', DEVICE].concat(info), quiet) === null) fail('Gerät konnte nicht eingetragen werden.');
+
+  say('  Öffne am TV die App "Developer Mode". Dort müssen "Dev Mode Status" und "Key Server" AN sein.');
+  let key = null;
+  for (let attempt = 1; !key; attempt++) {
+    const r = await fetchKey(host);
+    if (r.status === 200 && /-----BEGIN [A-Z ]*PRIVATE KEY-----/.test(r.body)) { key = r.body; break; }
+    if (r.error === 'ECONNREFUSED') {
+      say('  ✗ Der TV lehnt die Verbindung auf Port 9991 ab: Der Schalter "Key Server" ist aus.');
+      say('    (Er schaltet sich nach einem Neustart des TVs und nach einiger Zeit von selbst wieder aus.)');
+    } else if (r.error === 'timeout' || r.error === 'EHOSTUNREACH' || r.error === 'ETIMEDOUT') {
+      say('  ✗ Keine Antwort vom TV auf Port 9991 (' + r.error + '). Ist die Developer-Mode-App geöffnet?');
+      say('    Blockiert eine Firewall auf diesem Computer ausgehende Verbindungen?');
+    } else if (r.error) {
+      say('  ✗ Verbindung zum Key Server fehlgeschlagen: ' + r.error);
+    } else {
+      say('  ✗ Key Server antwortete unerwartet (HTTP ' + r.status + ').');
+    }
+    if (attempt >= 5) fail('SSH-Schlüssel nicht abgeholt. Prüfe die Punkte oben und starte setup erneut.');
+    await ask('    Schalte "Key Server" in der Developer-Mode-App ein und drücke dann Enter … ');
+  }
+
+  const sshDir = path.join(os.homedir(), '.ssh');
+  fs.mkdirSync(sshDir, { recursive: true, mode: 0o700 });
+  const keyName = DEVICE + '_webos';
+  fs.writeFileSync(path.join(sshDir, keyName), key, { mode: 0o600 });
+  say('  ✓ SSH-Schlüssel abgeholt (~/.ssh/' + keyName + ')');
+
+  for (let attempt = 1; ; attempt++) {
+    const pass = await ask('  Passphrase aus der Developer-Mode-App (6 Zeichen, Groß/Klein beachten): ');
+    if (!/^[A-Za-z0-9]{4,32}$/.test(pass)) { say('  Das sieht nicht nach der Passphrase aus. Nochmal.'); continue; }
+    if (ares('ares-setup-device', ['-m', DEVICE, '-i', 'privatekey=' + keyName, '-i', 'passphrase=' + pass], quiet) === null) {
+      fail('Gerät konnte nicht aktualisiert werden.');
+    }
+    const t = sshQuick('echo cleanhome-ok');
+    if (t.ok && t.out.includes('cleanhome-ok')) break;
+    say('  ✗ SSH-Anmeldung am TV (Port 9922) klappt nicht:\n    ' + t.out.trim().split('\n').slice(-2).join('\n    '));
+    if (attempt >= 3) fail('Verbindung nicht hergestellt. Passphrase prüfen, Developer-Mode-App neu öffnen, setup erneut starten.');
+    if (/ECONNREFUSED/.test(t.out)) say('  Port 9922 ist zu: Developer Mode ist nicht aktiv (Dev Mode Status AN, danach startet der TV neu).');
+    else say('  Meist ist die Passphrase falsch abgetippt (z. B. 0 und O, 1 und l verwechselt).');
   }
   say('  ✓ Verbindung eingerichtet');
 }
@@ -288,13 +349,20 @@ async function main() {
     case 'setup': {
       await sync(host, opts);
       const ipk = build();
-      setupDevice(loadState().host);
+      await setupDevice(loadState().host);
       install(ipk);
       say('\n✓ Fertig. CleanHome läuft jetzt.');
       say('  Tipp: Lege CleanHome auf eine Zifferntaste (Schnellzugriff), siehe README.');
       say('  Wichtig: Developer Mode läuft nach 50 Stunden ab, wenn du ihn nicht verlängerst (siehe README).');
       break;
     }
+    case 'connect':
+      // Nur Schritt 5 und 6: Developer-Mode-Verbindung einrichten und installieren (App-Liste bleibt).
+      if (host) { const st = loadState(); st.host = host; saveState(st); }
+      if (!loadState().host) fail('Bitte die IP-Adresse angeben: node tools/cleanhome.js connect <TV-IP>');
+      await setupDevice(loadState().host);
+      install(latestIpk());
+      break;
     case 'sync':
       await sync(host, opts);
       install(build());
@@ -321,7 +389,7 @@ async function main() {
       break;
     }
     default:
-      say(fs.readFileSync(__filename, 'utf8').split('\n').slice(2, 12).map((l) => l.replace(/^ \* ?/, '')).join('\n'));
+      say(fs.readFileSync(__filename, 'utf8').split('\n').slice(2, 13).map((l) => l.replace(/^ \* ?/, '')).join('\n'));
   }
 }
 
