@@ -98,6 +98,11 @@ LGs Home, öffnet er sofort CleanHome. Für einen Moment ist LGs Home dabei zu s
 - **Nach einem kompletten Neustart** des TVs (Stromstecker, Update) läuft er erst wieder, wenn CleanHome
   einmal geöffnet wurde, z. B. über die Schnellzugriffs-Zifferntaste. Aus dem Standby heraus läuft er weiter.
 - Abschalten: *Anpassen → Home-Taste öffnet CleanHome → Aus.*
+- **Versteckter Notausgang:** In *Anpassen* **OK 3 Sekunden gedrückt halten** oder **5× schnell ◀** drücken.
+  Dann erscheint oben „Notausgang“ mit *LG webOS öffnen* (Umleitung pausiert, LGs Home öffnet sich) und
+  *Home-Umleitung pausieren*. Beim nächsten Öffnen von CleanHome ist die Umleitung wieder an.
+- **Aufblitzen:** LGs Home ist kurz zu sehen, weil der TV erst meldet, dass es vorne ist. Ohne Root lässt sich
+  die Taste nicht vorher abfangen. Ganz ohne Aufblitzen geht es über die Schnellzugriff-Zifferntaste.
 - Er nutzt die Steuerschnittstelle des TVs mit dem Kopplungsschlüssel aus `setup`, liest nur, welche App vorne
   ist, und startet nur CleanHome. Keine Verbindungen ins Internet. Log auf dem TV: `/tmp/cleanhome-watch.log`.
 - Fehlersuche: `node tools/cleanhome.js diag --kurz`

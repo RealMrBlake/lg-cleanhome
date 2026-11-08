@@ -323,6 +323,29 @@
   var srows = [];          // [{type, ...}]
   var sfocus = { row: 0, col: 0 };
   var confirmReset = false;
+  var showExit = false;      // versteckter Notausgang (OK 3 s halten oder 5× links in „Anpassen“)
+  var secretTimer = null, leftCount = 0, leftAt = 0;
+
+  // Notausgang: Umleitung pausieren und LGs Home öffnen. Beim nächsten Öffnen von CleanHome
+  // wird die Umleitung wieder eingeschaltet (sofern sie in „Anpassen“ an ist).
+  function openLgHome() {
+    luna('luna://com.webos.applicationManager/launch', { id: HELPER_ID, params: { enabled: false } }, function () {
+      setTimeout(function () {
+        luna('luna://com.webos.applicationManager/launch', { id: 'com.webos.app.home' }, function (err) {
+          if (err) toast('Umleitung pausiert. Drück jetzt die Home-Taste.');
+        });
+      }, 600);
+    });
+    if (!hasBridge()) toast('Vorschau: Umleitung pausiert, würde LGs Home öffnen');
+  }
+  function revealExit() {
+    if (showExit || view !== 'settings') return;
+    showExit = true;
+    buildSettings();
+    sfocus = { row: 1, col: 0 };
+    renderSettings();
+    toast('Notausgang freigeschaltet');
+  }
 
   function wallLabel() {
     var w = layout.settings.wallpaper;
@@ -340,6 +363,13 @@
 
   function buildSettings() {
     srows = [];
+    if (showExit) {
+      srows.push({ type: 'head', label: 'Notausgang' });
+      srows.push({ type: 'action', label: 'LG webOS öffnen', button: 'Öffnen', sub: function () { return 'Home-Umleitung pausiert, bis du CleanHome wieder öffnest'; },
+        run: function () { openLgHome(); } });
+      srows.push({ type: 'action', label: 'Home-Umleitung bis zum nächsten Öffnen aus', button: 'Pausieren', sub: function () { return 'Die Home-Taste zeigt LGs Home, CleanHome bleibt installiert'; },
+        run: function () { luna('luna://com.webos.applicationManager/launch', { id: HELPER_ID, params: { enabled: false } }, function () {}); toast('Umleitung pausiert'); } });
+    }
     srows.push({ type: 'head', label: 'Allgemein' });
     srows.push({ type: 'toggle', label: 'Home-Taste öffnet CleanHome', sub: homeStatusText, value: function () { return layout.settings.home; },
       run: function () { layout.settings.home = !layout.settings.home; saveLayout(); homeStatus = null; startHomeService(renderSettings); } });
@@ -390,6 +420,7 @@
         row.appendChild(l);
         if (r.type === 'toggle') row.appendChild(chip(r.value() ? 'An' : 'Aus', r.value(), i, 0, 'dot'));
         else if (r.type === 'choice') row.appendChild(chip('◀  ' + r.value() + '  ▶', true, i, 0, 'wide'));
+        else if (r.button) row.appendChild(chip(r.button, true, i, 0));
         else row.appendChild(chip(confirmReset ? 'Wirklich?' : 'Zurücksetzen', confirmReset, i, 0));
       }
       list.appendChild(row);
@@ -423,6 +454,7 @@
   function openSettings(toApps) {
     view = 'settings';
     confirmReset = false;
+    showExit = false;
     buildSettings();
     sfocus = { row: 1, col: 0 };
     if (toApps) for (var i = 0; i < srows.length; i++) if (srows[i].type === 'app') { sfocus.row = i; break; }
@@ -439,6 +471,11 @@
   }
 
   function moveSettings(dir) {
+    if (dir === 'left') {
+      leftCount = Date.now() - leftAt < 1500 ? leftCount + 1 : 1;
+      leftAt = Date.now();
+      if (leftCount >= 5) { leftCount = 0; revealExit(); return; }
+    }
     var r = sfocus.row;
     if (dir === 'up' || dir === 'down') {
       var step = dir === 'up' ? -1 : 1;
@@ -608,6 +645,7 @@
       if (!e.repeat && !okDown) {
         okDown = true; held = false;
         okTimer = setTimeout(function () { okTimer = null; held = true; hold(); }, HOLD_MS);
+        if (view === 'settings') secretTimer = setTimeout(revealExit, 3000);
       }
     }
     else if (k === KEY.BACK || k === KEY.ESC) back();
@@ -622,6 +660,7 @@
     if (!okDown) return;
     okDown = false;
     if (okTimer) { clearTimeout(okTimer); okTimer = null; }
+    clearTimeout(secretTimer);
     if (!held) { lastOk = Date.now(); activate(); }
   });
 
