@@ -402,10 +402,6 @@ function install(ipk) {
   ares('ares-launch', ['--device', DEVICE, APP_ID]);
 }
 
-function latestIpk() {
-  const ipk = fs.existsSync(DIST) && fs.readdirSync(DIST).find((f) => f.endsWith('.ipk'));
-  return ipk ? path.join(DIST, ipk) : build();
-}
 
 function renew() {
   // Gleiches Vorgehen wie webOS Dev Manager: Sitzungs-Token vom TV lesen und bei LG die Sitzung zurücksetzen.
@@ -448,7 +444,7 @@ async function main() {
       if (host) { const st = loadState(); st.host = host; saveState(st); }
       if (!loadState().host) fail('Bitte die IP-Adresse angeben: node tools/cleanhome.js connect <TV-IP>');
       await setupDevice(loadState().host);
-      install(latestIpk());
+      install(build());
       break;
     case 'sync':
       await sync(host, opts);
@@ -458,7 +454,7 @@ async function main() {
       build();
       break;
     case 'install':
-      install(latestIpk());
+      install(build());
       break;
     case 'uninstall':
       if (ares('ares-install', ['--device', DEVICE, '--remove', APP_ID]) === null) fail('Entfernen fehlgeschlagen.');
