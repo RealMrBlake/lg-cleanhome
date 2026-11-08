@@ -8,6 +8,7 @@
  *   node tools/cleanhome.js build            nur das .ipk bauen (dist/)
  *   node tools/cleanhome.js install          gebautes .ipk installieren und starten
  *   node tools/cleanhome.js uninstall        CleanHome vom TV entfernen
+ *   node tools/cleanhome.js diag             Fehlersuche Home-Taste (Dienst-Status, Vordergrund-Apps)
  *   node tools/cleanhome.js apps             App-Namen und IDs anzeigen (für custom-icons/)
  *   node tools/cleanhome.js renew            Developer-Mode-Sitzung verlängern (Beta, s. README)
  *   node tools/cleanhome.js status           zeigt, was gespeichert ist
@@ -298,6 +299,40 @@ function fetchKey(host) {
   });
 }
 
+async function diag() {
+  const st = loadState();
+  if (!st.host || !st.clientKey) fail('Erst setup ausführen.');
+  say('\n=== 1. Dienst auf dem TV ===');
+  const cmds = [
+    'ls /media/developer/apps/usr/palm/services/ 2>&1',
+    'grep -o \'"host":"[^"]*"\' /media/developer/apps/usr/palm/services/io.cleanhome.tv.service/config.json 2>&1',
+    'which luna-send-pub luna-send node 2>&1; node -v 2>&1',
+    'luna-send-pub -n 1 -w 8000 luna://io.cleanhome.tv.service/start \'{"enabled":true}\' 2>&1',
+    'sleep 4; luna-send-pub -n 1 -w 8000 luna://io.cleanhome.tv.service/status \'{}\' 2>&1',
+    'ps 2>/dev/null | grep -i cleanhome | grep -v grep'
+  ];
+  for (const c of cmds) {
+    const r = sshQuick(c);
+    say('$ ' + c.split(' 2>&1')[0].slice(0, 90));
+    say('  ' + (r.out.trim() || '(keine Ausgabe)').split('\n').slice(0, 12).join('\n  '));
+  }
+
+  say('\n=== 2. Was meldet der TV als Vordergrund-App? ===');
+  say('Bitte jetzt innerhalb von 45 Sekunden am TV:');
+  say('  a) eine App öffnen (z. B. YouTube),  b) Home drücken,  c) CleanHome öffnen,  d) Home drücken.');
+  const tv = await ssapConnect(st.host, st);
+  await tv.register(st.clientKey);
+  const t0 = Date.now();
+  tv.send('subscribe', 'ssap://com.webos.applicationManager/getForegroundAppInfo', {}, (m) => {
+    const p = m.payload || {};
+    say('  +' + ((Date.now() - t0) / 1000).toFixed(1) + ' s  appId=' + JSON.stringify(p.appId) +
+      (p.windowId ? '  windowId=' + p.windowId : '') + (m.type === 'error' ? '  FEHLER: ' + m.error : ''));
+  });
+  await new Promise((r) => setTimeout(r, 45000));
+  tv.close();
+  say('\nFertig. Bitte die komplette Ausgabe an Claude schicken.');
+}
+
 function sshQuick(cmd) {
   const bin = path.join(ROOT, 'node_modules', '.bin', 'ares-novacom' + (process.platform === 'win32' ? '.cmd' : ''));
   const r = spawnSync(bin, ['--device', DEVICE, '--run', cmd], { shell: process.platform === 'win32', timeout: 30000 });
@@ -423,6 +458,9 @@ async function main() {
       if (ares('ares-install', ['--device', DEVICE, '--remove', APP_ID]) === null) fail('Entfernen fehlgeschlagen.');
       say('✓ CleanHome entfernt. Der TV ist wieder wie vorher.');
       break;
+    case 'diag':
+      await diag();
+      break;
     case 'apps': {
       const txt = fs.readFileSync(path.join(APP_DIR, 'js', 'inventory.js'), 'utf8');
       const inv = JSON.parse(txt.slice(txt.indexOf('=') + 1).trim().replace(/;$/, ''));
@@ -442,7 +480,7 @@ async function main() {
       break;
     }
     default:
-      say(fs.readFileSync(__filename, 'utf8').split('\n').slice(2, 14).map((l) => l.replace(/^ \* ?/, '')).join('\n'));
+      say(fs.readFileSync(__filename, 'utf8').split('\n').slice(2, 15).map((l) => l.replace(/^ \* ?/, '')).join('\n'));
   }
 }
 
