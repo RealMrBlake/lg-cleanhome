@@ -84,7 +84,7 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
   opacity: 0; transition: opacity 0.15s ease;
 }
 .tile.focus { transform: scale(1.12); box-shadow: 0 18px 50px rgba(0,0,0,0.6), 0 0 0 4px var(--ring); z-index: 2; }
-.tile.focus .name { opacity: 1; }
+.tile.focus .name { opacity: 0; }  /* Name unter der Kachel ausgeblendet; er steht oben im Regal */
 .tile.moving { transform: scale(1.16) translateY(-10px); box-shadow: 0 0 0 5px #ffd34d, 0 24px 60px rgba(0,0,0,0.7); }
 body.move-mode .tile:not(.moving) { opacity: 0.4; }
 .tile.empty { background: transparent; border: 2px dashed rgba(255,255,255,0.18); }
