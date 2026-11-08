@@ -41,23 +41,23 @@ process.on('exit', function () { try { if (fs.readFileSync(PID_FILE, 'utf8') ===
 
 var socket = null, retryTimer = null, backoff = 2000;
 var prevApp = null, lastRedirect = 0, msgId = 0, redirects = 0;
-var wokeAt = 0, lastTick = Date.now(), closedAt = 0;
+var wokeAt = 0, lastTick = Date.now(), closedAt = 0, prevPower = null;
+var pending = {};          // id -> callback(message) für Einzelanfragen
+var pollTimer = null;
 
 function wakeEnabled() { return !fs.existsSync(WAKE_OFF_FILE); }
+function enabled() { return !fs.existsSync(OFF_FILE); }
 
-// Standby erkennen: Während der TV schläft, steht der Prozess still. Ein großer Sprung zwischen zwei
-// Takten heißt also „gerade aufgewacht“. Dann die Verbindung neu aufbauen (sie ist oft tot).
+// Signal 1 fürs Einschalten: Zeitsprung. Ohne Quick Start+ steht der Prozess im Standby still.
 setInterval(function () {
   var now = Date.now();
-  if (now - lastTick > 20000) {
-    log('Aufwachen erkannt (' + Math.round((now - lastTick) / 1000) + ' s Pause)');
-    wokeAt = now;
+  if (now - lastTick > 15000) {
+    log('Zeitsprung ' + Math.round((now - lastTick) / 1000) + ' s: TV war vermutlich aus');
     if (socket) { try { socket.terminate(); } catch (e) { /* egal */ } }
+    wake('Zeitsprung');
   }
   lastTick = now;
 }, 3000);
-
-function enabled() { return !fs.existsSync(OFF_FILE); }
 
 function hosts() {
   var out = [];
@@ -71,36 +71,91 @@ function hosts() {
   return out;
 }
 
-function send(type, uri, payload) {
+function send(type, uri, payload, cb) {
   if (!socket || socket.readyState !== 1) return null;
   var id = type + '_' + (++msgId);
   var m = { type: type, id: id, payload: payload || {} };
   if (uri) m.uri = uri;
-  try { socket.send(JSON.stringify(m)); } catch (e) { return null; }
+  if (cb) pending[id] = cb;
+  try { socket.send(JSON.stringify(m)); } catch (e) { delete pending[id]; return null; }
   return id;
+}
+
+function launchSelf(why) {
+  lastRedirect = Date.now();
+  log(why + ', öffne CleanHome');
+  send('request', 'ssap://system.launcher/launch', { id: SELF });
+}
+
+// Einschalten erkannt: kurz warten, dann nachsehen, womit der TV gestartet ist.
+function wake(why) {
+  wokeAt = Date.now();
+  log('Einschalten erkannt (' + why + ')');
+  [1500, 4000].forEach(function (ms) {
+    setTimeout(function () {
+      send('request', 'ssap://com.webos.applicationManager/getForegroundAppInfo', {}, function (m) {
+        var id = m.payload && m.payload.appId;
+        if (wokeAt) checkWake(id);
+      });
+    }, ms);
+  });
+}
+
+function checkWake(appId) {
+  if (!wokeAt || Date.now() - wokeAt > WAKE_WINDOW_MS) { wokeAt = 0; return false; }
+  if (!appId) return false;
+  wokeAt = 0;
+  if (appId !== SELF && START_IDS.indexOf(appId) >= 0 && enabled() && wakeEnabled()) {
+    launchSelf('Eingeschaltet mit ' + appId);
+    return true;
+  }
+  log('Eingeschaltet mit ' + appId + ', bleibt');
+  return false;
 }
 
 function onForeground(appId) {
   if (!appId) return;   // direkt nach einem Start ist die Angabe kurz leer
+  if (appId === prevApp) return;
+  log('Vordergrund: ' + appId);
   var wasSelf = prevApp === SELF;
   prevApp = appId;
-  if (wokeAt && Date.now() - wokeAt < WAKE_WINDOW_MS) {
-    wokeAt = 0;
-    if (appId !== SELF && START_IDS.indexOf(appId) >= 0 && enabled() && wakeEnabled()) {
-      lastRedirect = Date.now();
-      log('Eingeschaltet mit ' + appId + ', öffne CleanHome');
-      send('request', 'ssap://system.launcher/launch', { id: SELF });
-      return;
-    }
-  }
+  if (checkWake(appId)) return;
   if (HOME_IDS.indexOf(appId) < 0) return;
   if (!enabled()) return;
   if (wasSelf) { log('Home aus CleanHome heraus: LG Home bleibt'); return; }
   if (Date.now() - lastRedirect < 1500) return;
-  lastRedirect = Date.now();
   redirects++;
-  log('LG Home erkannt, öffne CleanHome (' + redirects + ')');
-  send('request', 'ssap://system.launcher/launch', { id: SELF });
+  launchSelf('LG Home erkannt (' + redirects + ')');
+}
+
+// Signal 2 fürs Einschalten: Ein/Aus-Zustand des TVs.
+function onPower(p) {
+  var st = p && (p.state || p.powerState);
+  if (!st) return;
+  if (st !== prevPower) log('Ein/Aus-Zustand: ' + st + (p.processing ? ' (' + p.processing + ')' : ''));
+  if (prevPower && prevPower !== 'Active' && st === 'Active') wake('Zustand ' + prevPower + ' → Active');
+  prevPower = st;
+}
+
+// Signal 3: regelmäßig selbst nachfragen (falls der TV Meldungen verschluckt) und tote Verbindungen erkennen.
+function startPolling(ws) {
+  clearInterval(pollTimer);
+  var waiting = 0;
+  pollTimer = setInterval(function () {
+    if (socket !== ws) return clearInterval(pollTimer);
+    if (waiting && Date.now() - waiting > 8000) {
+      log('Keine Antwort vom TV, verbinde neu');
+      waiting = 0;
+      try { ws.terminate(); } catch (e) { /* egal */ }
+      return;
+    }
+    if (waiting) return;
+    waiting = Date.now();
+    send('request', 'ssap://com.webos.applicationManager/getForegroundAppInfo', {}, function (m) {
+      waiting = 0;
+      onForeground(m.payload && m.payload.appId);
+    });
+  }, 4000);
 }
 
 function connect(index) {
@@ -113,11 +168,11 @@ function connect(index) {
   try { ws = new WebSocket('wss://' + host + ':3001', { rejectUnauthorized: false, handshakeTimeout: 8000 }); }
   catch (e) { log('Fehler: ' + e.message); return retry((index || 0) + 1); }
   socket = ws;
-  var subId = null;
+  var subId = null, powerId = null;
   ws.on('open', function () {
     send('register', null, {
       forcePairing: false, pairingType: 'PROMPT', 'client-key': cfg.clientKey,
-      manifest: { manifestVersion: 1, appVersion: '1.0', permissions: ['LAUNCH', 'READ_INSTALLED_APPS', 'READ_RUNNING_APPS', 'READ_APP_STATUS', 'READ_INPUT_DEVICE_LIST'] }
+      manifest: { manifestVersion: 1, appVersion: '1.0', permissions: ['LAUNCH', 'READ_INSTALLED_APPS', 'READ_RUNNING_APPS', 'READ_APP_STATUS', 'READ_INPUT_DEVICE_LIST', 'READ_POWER_STATE'] }
     });
   });
   ws.on('message', function (raw) {
@@ -130,21 +185,32 @@ function connect(index) {
       }
       backoff = 2000;
       prevApp = null;
-      // Lange getrennt (TV war aus, Netzwerk weg): auch das als Aufwachen werten.
-      if (closedAt && Date.now() - closedAt > 20000) wokeAt = Date.now();
+      log('verbunden mit ' + host);
+      // Lange getrennt (TV war aus, Netzwerk weg): auch das als Einschalten werten.
+      if (closedAt && Date.now() - closedAt > 15000) wake('Verbindung war ' + Math.round((Date.now() - closedAt) / 1000) + ' s weg');
       closedAt = 0;
       subId = send('subscribe', 'ssap://com.webos.applicationManager/getForegroundAppInfo', {});
-      log('verbunden mit ' + host);
-    } else if (m.type === 'error') {
-      log('TV meldet Fehler: ' + String(m.error).slice(0, 200));
+      powerId = send('subscribe', 'ssap://com.webos.service.tvpower/power/getPowerState', {});
+      startPolling(ws);
+      return;
+    }
+    var cb = pending[m.id];
+    if (cb) { delete pending[m.id]; if (m.type !== 'error') cb(m); else log('Anfrage abgelehnt: ' + String(m.error).slice(0, 160)); return; }
+    if (m.type === 'error') {
+      log((m.id === powerId ? 'Ein/Aus-Zustand nicht lesbar: ' : 'TV meldet Fehler: ') + String(m.error).slice(0, 200));
     } else if (subId && m.id === subId && m.payload) {
       onForeground(m.payload.appId);
+    } else if (powerId && m.id === powerId && m.payload) {
+      onPower(m.payload);
     }
   });
   ws.on('error', function (e) { log('Verbindungsfehler: ' + String(e && e.message || e).slice(0, 200)); });
   ws.on('close', function () {
     if (socket === ws) socket = null;
-    closedAt = Date.now();
+    clearInterval(pollTimer);
+    pending = {};
+    if (!closedAt) closedAt = Date.now();
+    log('Verbindung getrennt');
     retry((index || 0) + 1);
   });
 }
