@@ -303,20 +303,26 @@ async function diag() {
   const st = loadState();
   if (!st.host || !st.clientKey) fail('Erst setup ausführen.');
   say('\n=== 1. Dienst auf dem TV ===');
+  const D = '/media/developer/apps/usr/palm/services/io.cleanhome.tv.service';
   const cmds = [
-    'ls /media/developer/apps/usr/palm/services/ 2>&1',
-    'grep -o \'"host":"[^"]*"\' /media/developer/apps/usr/palm/services/io.cleanhome.tv.service/config.json 2>&1',
-    'which luna-send-pub luna-send node 2>&1; node -v 2>&1',
-    'luna-send-pub -n 1 -w 8000 luna://io.cleanhome.tv.service/start \'{"enabled":true}\' 2>&1',
-    'sleep 4; luna-send-pub -n 1 -w 8000 luna://io.cleanhome.tv.service/status \'{}\' 2>&1',
-    'ps 2>/dev/null | grep -i cleanhome | grep -v grep'
+    'ls -la ' + D + ' 2>&1',
+    'grep -o \'"host":"[^"]*"\' ' + D + '/config.json 2>&1',
+    'node -v 2>&1; ls /usr/lib/node_modules 2>&1 | head -20',
+    'luna-send-pub -n 1 -w 8000 luna://io.cleanhome.tv.service/status \'{}\' 2>&1; echo "exit=$?"',
+    'luna-send-pub -n 1 -w 5000 luna://com.webos.service.applicationmanager/getForegroundAppInfo \'{}\' 2>&1; echo "exit=$?"',
+    'ps 2>&1 | head -3; ps 2>&1 | grep -i -E "cleanhome|jsservice" | grep -v grep; echo "(ps fertig)"',
+    'journalctl -n 400 --no-pager 2>&1 | grep -i -E "cleanhome|io.cleanhome" | tail -25; echo "(journal fertig)"',
+    'ls /var/log 2>&1 | head; grep -i -h cleanhome /var/log/messages /var/log/legacy-log 2>/dev/null | tail -20; echo "(log fertig)"',
+    'which setsid nohup start-stop-daemon 2>&1; echo "(tools fertig)"',
+    'cd ' + D + ' && timeout 12 node selftest.js 2>&1; echo "exit=$?"'
   ];
   for (const c of cmds) {
     const r = sshQuick(c);
-    say('$ ' + c.split(' 2>&1')[0].slice(0, 90));
-    say('  ' + (r.out.trim() || '(keine Ausgabe)').split('\n').slice(0, 12).join('\n  '));
+    say('$ ' + c.slice(0, 110));
+    say('  ' + (r.out.replace(/\[Info\] Set target device : \S+\n?/g, '').trim() || '(keine Ausgabe)').split('\n').slice(0, 30).join('\n  '));
   }
 
+  if (process.argv.includes('--kurz')) { say('\nFertig. Bitte die komplette Ausgabe an Claude schicken.'); return; }
   say('\n=== 2. Was meldet der TV als Vordergrund-App? ===');
   say('Bitte jetzt innerhalb von 45 Sekunden am TV:');
   say('  a) eine App öffnen (z. B. YouTube),  b) Home drücken,  c) CleanHome öffnen,  d) Home drücken.');
