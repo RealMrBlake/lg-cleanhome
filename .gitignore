@@ -1,7 +1,7 @@
 node_modules/
 dist/
 *.zip
-service/config.json
-service/node_modules/
+helper/config.json
+helper/node_modules/
 app/wallpapers/
 app/js/wallpapers.js

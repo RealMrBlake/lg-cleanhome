@@ -6,7 +6,7 @@ var out = function (s) { console.log('  selftest: ' + s); };
 var WebSocket;
 try { WebSocket = require('ws'); out('ws geladen'); } catch (e) { out('ws FEHLT: ' + e.message); process.exit(1); }
 try { require('webos-service'); out('webos-service vorhanden'); } catch (e) { out('webos-service nicht ladbar: ' + e.message); }
-var cfg = JSON.parse(fs.readFileSync(__dirname + '/config.json', 'utf8'));
+var cfg = JSON.parse(fs.readFileSync(__dirname + '/config.json', 'utf8'));  // im Helper-Ordner
 var ws = new WebSocket('wss://' + cfg.host + ':3001', { rejectUnauthorized: false, handshakeTimeout: 6000 });
 var t = setTimeout(function () { out('Zeitüberschreitung'); process.exit(2); }, 9000);
 ws.on('open', function () {

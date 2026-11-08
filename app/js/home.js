@@ -17,7 +17,7 @@
   var BRANDS = window.CLEANHOME_BRANDS || [];
   var WALLS = window.CLEANHOME_WALLPAPERS || [];
   var SELF_ID = 'io.cleanhome.tv';
-  var SERVICE = 'luna://io.cleanhome.tv.service/';
+  var HELPER_ID = 'io.cleanhome.tv.helper';
   var STORE_KEY = 'cleanhome.layout.v1';
   var COLS = 6;
   var DOCK_MAX = 6;
@@ -301,20 +301,21 @@
 
   // ---------- Home-Tasten-Dienst ----------
 
-  var homeStatus = null;   // Antwort des Dienstes oder {error}
+  var homeStatus = null;   // null = noch nicht gestartet, {ok} oder {error}
+  // Startet den Home-Wächter über die unsichtbare Helper-App (falls er nicht schon läuft)
+  // und teilt ihm mit, ob die Umleitung an oder aus sein soll.
   function startHomeService(cb) {
-    luna(SERVICE + 'start', { enabled: !!layout.settings.home }, function (err, d) {
-      homeStatus = err ? { error: err.message } : d;
+    luna('luna://com.webos.applicationManager/launch', { id: HELPER_ID, params: { enabled: !!layout.settings.home } }, function (err) {
+      homeStatus = err ? { error: err.message } : { ok: true };
       if (cb) cb();
     }, 8000);
   }
   function homeStatusText() {
     if (!hasBridge()) return 'Nur auf dem TV verfügbar';
-    if (!homeStatus) return 'Prüfe …';
-    if (homeStatus.error && !homeStatus.returnValue) return 'Dienst nicht erreichbar: ' + homeStatus.error;
-    if (!homeStatus.enabled) return 'Aus: die Home-Taste öffnet LGs Home';
-    if (homeStatus.connected) return 'Aktiv · Home aus CleanHome heraus öffnet LGs Home' + (homeStatus.redirects ? ' · ' + homeStatus.redirects + '× umgeleitet' : '');
-    return 'Verbindet … ' + (homeStatus.error ? '(' + homeStatus.error + ')' : '');
+    if (!layout.settings.home) return 'Aus: die Home-Taste öffnet LGs Home';
+    if (!homeStatus) return 'Starte …';
+    if (homeStatus.error) return 'Helper nicht startbar: ' + homeStatus.error;
+    return 'An · Home aus CleanHome heraus öffnet LGs Home';
   }
 
   // ---------- Anpassen (Einstellungen) ----------

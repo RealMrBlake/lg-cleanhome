@@ -88,16 +88,21 @@ Die Anordnung speichert CleanHome auf dem TV. Ausblenden deinstalliert nichts.
 
 ## Home-Taste
 
-Ein kleiner Dienst, der mit CleanHome installiert wird (`service/`), schaut, welche App vorne ist. Erscheint
+Ein kleiner Hintergrundprozess (der „Wächter“, `helper/watcher.js`) schaut, welche App vorne ist. Erscheint
 LGs Home, öffnet er sofort CleanHome. Für einen Moment ist LGs Home dabei zu sehen.
 
 - **Notausgang:** Drückst du Home, *während CleanHome offen ist*, bleibt LGs Home stehen. So kommst du
   jederzeit an LGs eigene Menüs.
-- **Nach einem kompletten Neustart** des TVs (Stromstecker, Update) läuft der Dienst erst wieder, wenn
-  CleanHome einmal geöffnet wurde, z. B. über die Schnellzugriffs-Zifferntaste. Aus dem Standby heraus läuft er weiter.
+- **Wer startet ihn?** `install`/`setup` starten ihn direkt. Außerdem startet CleanHome ihn bei jedem Öffnen
+  über die unsichtbare App „CleanHome Helper“ (`helper/`), falls er nicht läuft.
+- **Nach einem kompletten Neustart** des TVs (Stromstecker, Update) läuft er erst wieder, wenn CleanHome
+  einmal geöffnet wurde, z. B. über die Schnellzugriffs-Zifferntaste. Aus dem Standby heraus läuft er weiter.
 - Abschalten: *Anpassen → Home-Taste öffnet CleanHome → Aus.*
-- Der Dienst nutzt die Steuerschnittstelle des TVs mit dem Kopplungsschlüssel aus `setup` und liest nur,
-  welche App vorne ist. Er macht keine Verbindungen ins Internet.
+- Er nutzt die Steuerschnittstelle des TVs mit dem Kopplungsschlüssel aus `setup`, liest nur, welche App vorne
+  ist, und startet nur CleanHome. Keine Verbindungen ins Internet. Log auf dem TV: `/tmp/cleanhome-watch.log`.
+- Fehlersuche: `node tools/cleanhome.js diag --kurz`
+
+LGs eigenes Dienst-System (Luna-Services) startet bei Developer-Mode-Apps auf webOS 25 nichts. Deshalb dieser Weg.
 
 ## Eigene Icons und Hintergründe
 
@@ -128,6 +133,7 @@ node tools/cleanhome.js renew
 | Befehl | Wozu |
 |---|---|
 | `node tools/cleanhome.js connect` | Nur Developer-Mode-Verbindung einrichten und installieren (z. B. wenn `setup` bei Schritt 5 abbrach). |
+| `node tools/cleanhome.js diag --kurz` | Fehlersuche für die Home-Umleitung. |
 | `node tools/cleanhome.js apps` | App-Namen und IDs anzeigen (für `custom-icons/`). |
 | `node tools/cleanhome.js sync` | Neue App installiert? Liste und Icons neu holen und CleanHome aktualisieren. |
 | `node tools/cleanhome.js uninstall` | CleanHome entfernen. Der TV ist danach wie vorher. |
@@ -158,7 +164,7 @@ app/                 die TV-App (HTML/CSS/JS, keine Abhängigkeiten)
   js/home.js         Oberfläche, Navigation, Anpassen, Starten
   js/brands.js       Markenkacheln (Farbe + Schrift, keine Logos)
   js/inventory.js    App-Liste deines TVs (wird von setup/sync erzeugt)
-service/             Dienst auf dem TV, der die Home-Taste zu CleanHome umleitet
+helper/              unsichtbare Helper-App und Wächter, der die Home-Taste zu CleanHome umleitet
 custom-icons/        eigene App-Icons (optional)
 wallpapers/          Hintergrundbilder
 tools/cleanhome.js   Kopplung, App-Liste und Icons lesen, bauen, installieren

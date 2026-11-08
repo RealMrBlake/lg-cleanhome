@@ -1,6 +1,0 @@
-{
-  "id": "io.cleanhome.tv.service",
-  "description": "CleanHome: öffnet CleanHome, wenn LGs Home erscheint",
-  "services": [{ "name": "io.cleanhome.tv.service" }],
-  "requiredACG": ["activity.operation", "application.launcher"]
-}

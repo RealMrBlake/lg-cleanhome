@@ -34,7 +34,9 @@ const { prepareWallpapers } = require('./assets');
 
 const ROOT = path.resolve(__dirname, '..');
 const APP_DIR = path.join(ROOT, 'app');
-const SERVICE_DIR = path.join(ROOT, 'service');
+const HELPER_DIR = path.join(ROOT, 'helper');
+const HELPER_ID = 'io.cleanhome.tv.helper';
+const HELPER_REMOTE = '/media/developer/apps/usr/palm/applications/' + HELPER_ID;
 const DIST = path.join(ROOT, 'dist');
 const STATE_DIR = path.join(os.homedir(), '.lg-cleanhome');
 const STATE_FILE = path.join(STATE_DIR, 'state.json');
@@ -261,23 +263,25 @@ async function sync(host, opts) {
 // ---------- Bauen und Installieren ----------
 
 function build() {
-  say('\n④ Baue das App-Paket …');
+  say('\n④ Baue die App-Pakete …');
   fs.rmSync(DIST, { recursive: true, force: true });
   fs.mkdirSync(DIST, { recursive: true });
   say('  Hintergrundbilder: ' + prepareWallpapers());
-  // Dienst für die Home-Taste: Kopplungsschlüssel und die WebSocket-Bibliothek mitgeben.
+  if (ares('ares-package', [APP_DIR, '-o', DIST, '--no-minify'], { stdio: ['inherit', 'inherit', 'ignore'] }) === null) fail('Paket konnte nicht gebaut werden.');
+  // Helper für die Home-Taste: Kopplungsschlüssel und die WebSocket-Bibliothek mitgeben.
   const st = loadState();
-  fs.writeFileSync(path.join(SERVICE_DIR, 'config.json'), JSON.stringify({ host: st.host || null, clientKey: st.clientKey || null }));
-  const wsSrc = path.dirname(require.resolve('ws/package.json'));
-  const wsDst = path.join(SERVICE_DIR, 'node_modules', 'ws');
+  fs.writeFileSync(path.join(HELPER_DIR, 'config.json'), JSON.stringify({ host: st.host || null, clientKey: st.clientKey || null }));
+  const wsDst = path.join(HELPER_DIR, 'node_modules', 'ws');
   fs.rmSync(wsDst, { recursive: true, force: true });
-  fs.cpSync(wsSrc, wsDst, { recursive: true });
-  if (!st.clientKey) say('  (noch nicht gekoppelt: der Home-Tasten-Dienst bleibt inaktiv, bis setup/sync gelaufen ist)');
-  if (ares('ares-package', [APP_DIR, SERVICE_DIR, '-o', DIST, '--no-minify']) === null) fail('Paket konnte nicht gebaut werden.');
-  const ipk = fs.readdirSync(DIST).find((f) => f.endsWith('.ipk'));
-  if (!ipk) fail('Kein .ipk erzeugt.');
-  say('  ✓ ' + path.join('dist', ipk));
-  return path.join(DIST, ipk);
+  fs.cpSync(path.dirname(require.resolve('ws/package.json')), wsDst, { recursive: true });
+  fs.chmodSync(path.join(HELPER_DIR, 'start.sh'), 0o755);
+  if (!st.clientKey) say('  (noch nicht gekoppelt: die Home-Umleitung bleibt aus, bis setup/sync gelaufen ist)');
+  if (ares('ares-package', [HELPER_DIR, '-o', DIST, '--no-minify'], { stdio: ['inherit', 'inherit', 'ignore'] }) === null) fail('Helper-Paket konnte nicht gebaut werden.');
+  const ipks = fs.readdirSync(DIST).filter((f) => f.endsWith('.ipk')).sort();
+  if (ipks.length < 2) fail('Pakete nicht vollständig erzeugt.');
+  ipks.forEach((f) => say('  ✓ ' + path.join('dist', f)));
+  // Haupt-App zuletzt installieren, damit sie danach gestartet werden kann.
+  return ipks.sort((x, y) => (x.includes('helper') ? -1 : 1) - (y.includes('helper') ? -1 : 1)).map((f) => path.join(DIST, f));
 }
 
 function ask(question) {
@@ -302,18 +306,14 @@ function fetchKey(host) {
 async function diag() {
   const st = loadState();
   if (!st.host || !st.clientKey) fail('Erst setup ausführen.');
-  say('\n=== 1. Dienst auf dem TV ===');
-  const D = '/media/developer/apps/usr/palm/services/io.cleanhome.tv.service';
+  say('\n=== 1. Home-Wächter auf dem TV ===');
+  const D = HELPER_REMOTE;
   const cmds = [
     'ls -la ' + D + ' 2>&1',
     'grep -o \'"host":"[^"]*"\' ' + D + '/config.json 2>&1',
-    'node -v 2>&1; ls /usr/lib/node_modules 2>&1 | head -20',
-    'luna-send-pub -n 1 -w 8000 luna://io.cleanhome.tv.service/status \'{}\' 2>&1; echo "exit=$?"',
-    'luna-send-pub -n 1 -w 5000 luna://com.webos.service.applicationmanager/getForegroundAppInfo \'{}\' 2>&1; echo "exit=$?"',
-    'ps 2>&1 | head -3; ps 2>&1 | grep -i -E "cleanhome|jsservice" | grep -v grep; echo "(ps fertig)"',
-    'journalctl -n 400 --no-pager 2>&1 | grep -i -E "cleanhome|io.cleanhome" | tail -25; echo "(journal fertig)"',
-    'ls /var/log 2>&1 | head; grep -i -h cleanhome /var/log/messages /var/log/legacy-log 2>/dev/null | tail -20; echo "(log fertig)"',
-    'which setsid nohup start-stop-daemon 2>&1; echo "(tools fertig)"',
+    'node -v 2>&1',
+    'P=$(cat /tmp/cleanhome-watch.pid 2>/dev/null); echo "pid=$P"; [ -n "$P" ] && kill -0 $P 2>/dev/null && echo "Wächter läuft" || echo "Wächter läuft NICHT"; [ -f /tmp/cleanhome-watch.off ] && echo "abgeschaltet (Anpassen)"',
+    'tail -n 25 /tmp/cleanhome-watch.log 2>&1',
     'cd ' + D + ' && timeout 12 node selftest.js 2>&1; echo "exit=$?"'
   ];
   for (const c of cmds) {
@@ -395,10 +395,17 @@ async function setupDevice(host) {
   say('  ✓ Verbindung eingerichtet');
 }
 
-function install(ipk) {
+function install(ipks) {
   say('\n⑥ Installiere auf dem TV …');
-  if (ares('ares-install', ['--device', DEVICE, ipk]) === null) fail('Installation fehlgeschlagen.');
+  for (const ipk of ipks) {
+    if (ares('ares-install', ['--device', DEVICE, ipk]) === null) fail('Installation fehlgeschlagen: ' + path.basename(ipk));
+  }
   say('  ✓ installiert');
+  // Alten Wächter beenden (neue Version), dann neu starten.
+  sshQuick('kill $(cat /tmp/cleanhome-watch.pid 2>/dev/null) 2>/dev/null; rm -f /tmp/cleanhome-watch.off; sleep 1; sh ' + HELPER_REMOTE + '/start.sh');
+  const r = sshQuick('sleep 3; tail -n 3 /tmp/cleanhome-watch.log');
+  if (/verbunden mit/.test(r.out)) say('  ✓ Home-Umleitung läuft');
+  else say('  ? Home-Umleitung: ' + r.out.replace(/\[Info\][^\n]*\n?/g, '').trim().split('\n').pop() + '  (Details: node tools/cleanhome.js diag --kurz)');
   ares('ares-launch', ['--device', DEVICE, APP_ID]);
 }
 
@@ -457,6 +464,8 @@ async function main() {
       install(build());
       break;
     case 'uninstall':
+      sshQuick('kill $(cat /tmp/cleanhome-watch.pid 2>/dev/null) 2>/dev/null');
+      ares('ares-install', ['--device', DEVICE, '--remove', HELPER_ID]);
       if (ares('ares-install', ['--device', DEVICE, '--remove', APP_ID]) === null) fail('Entfernen fehlgeschlagen.');
       say('✓ CleanHome entfernt. Der TV ist wieder wie vorher.');
       break;

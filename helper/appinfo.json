@@ -1,0 +1,14 @@
+{
+  "id": "io.cleanhome.tv.helper",
+  "version": "1.0.0",
+  "vendor": "CleanHome (privat)",
+  "type": "native",
+  "main": "start.sh",
+  "title": "CleanHome Helper",
+  "icon": "icon.png",
+  "noWindow": true,
+  "visible": false,
+  "noSplashOnLaunch": true,
+  "spinnerOnLaunch": false,
+  "requiredACG": ["application.launcher"]
+}
