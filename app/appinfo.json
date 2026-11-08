@@ -1,0 +1,18 @@
+{
+  "id": "io.cleanhome.tv",
+  "version": "1.0.0",
+  "vendor": "CleanHome (privat)",
+  "type": "web",
+  "main": "index.html",
+  "title": "CleanHome",
+  "icon": "icon.png",
+  "largeIcon": "largeIcon.png",
+  "bgColor": "#0b0c0f",
+  "resolution": "1920x1080",
+  "disableBackHistoryAPI": true,
+  "noSplashOnLaunch": true,
+  "spinnerOnLaunch": false,
+  "requiredACG": [
+    "application.launcher"
+  ]
+}

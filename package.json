@@ -1,0 +1,15 @@
+{
+  "name": "lg-cleanhome",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Ruhiger Startbildschirm für LG webOS TVs (Developer Mode, ohne Root)",
+  "scripts": {
+    "setup": "node tools/cleanhome.js setup",
+    "build": "node tools/cleanhome.js build",
+    "preview": "node preview/shot.js"
+  },
+  "dependencies": {
+    "@webos-tools/cli": "^3.2.1",
+    "ws": "^8.18.0"
+  }
+}

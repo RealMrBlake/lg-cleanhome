@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<!-- Keine Netzwerkverbindungen: connect-src 'none'. Nur eigene Dateien (file:) und Icons vom TV. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' file:; style-src 'self' file:; img-src 'self' file: data:; font-src 'self' file:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<title>CleanHome</title>
+<link rel="stylesheet" href="css/home.css">
+</head>
+<body>
+<div id="glow"></div>
+
+<header id="top">
+  <div id="greeting">
+    <div id="clock">--:--</div>
+    <div id="date"></div>
+  </div>
+  <nav id="actions">
+    <button class="pill focusable" data-action="inputs" id="btn-inputs"><span class="ic">⇥</span>Eingänge</button>
+    <button class="pill focusable" data-action="livetv" id="btn-livetv"><span class="ic">▣</span>Live-TV</button>
+    <button class="pill focusable" data-action="settings" id="btn-settings"><span class="ic">⚙</span>Einstellungen</button>
+  </nav>
+</header>
+
+<main id="main">
+  <section id="shelf">
+    <div id="shelf-title"></div>
+    <div id="shelf-sub"></div>
+  </section>
+  <section id="dock-wrap"><div id="dock" class="row"></div></section>
+  <section id="grid-wrap">
+    <div class="section-label">Alle Apps</div>
+    <div id="grid"></div>
+  </section>
+</main>
+
+<div id="overlay" class="hidden">
+  <div id="sheet">
+    <div id="sheet-title"></div>
+    <div id="sheet-list"></div>
+    <div id="sheet-hint">Zurück schließt</div>
+  </div>
+</div>
+
+<div id="toast" class="hidden"></div>
+<div id="fade"></div>
+<div id="hint">OK lange drücken: Verschieben · Ins Dock · Ausblenden &nbsp;·&nbsp; Blaue Taste: App-Bibliothek</div>
+
+<script src="js/inventory.js"></script>
+<script src="js/home.js"></script>
+</body>
+</html>
