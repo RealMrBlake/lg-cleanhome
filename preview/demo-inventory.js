@@ -15,6 +15,11 @@ window.CLEANHOME_INVENTORY = {
     { id: 'com.webos.app.connectionwizard', title: 'Geräteverbindung', color: '#3d4452' },
     { id: 'com.webos.app.browser', title: 'Webbrowser', color: '#2f6fd6' },
     { id: 'joyn', title: 'Joyn', color: '#2a2a2a' },
+    { id: 'emby.webos', title: 'Emby', color: '#52b54b' },
+    { id: 'crunchyroll', title: 'Crunchyroll', color: '#f47521' },
+    { id: 'com.cbs-ent.paramountplus', title: 'Paramount+', color: '#0064ff' },
+    { id: 'plex', title: 'Plex', color: '#1f1f1f' },
+    { id: 'com.webos.app.screensaver', title: 'Galerie', icon: 'largeIcon.png', fill: true, color: '#0b0c0f' },
     { id: 'com.webos.app.home', title: 'Home (LG)' },
     { id: 'com.webos.app.lgchannels', title: 'LG Channels' }
   ],

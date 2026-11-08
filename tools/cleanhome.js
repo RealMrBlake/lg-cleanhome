@@ -8,6 +8,7 @@
  *   node tools/cleanhome.js build            nur das .ipk bauen (dist/)
  *   node tools/cleanhome.js install          gebautes .ipk installieren und starten
  *   node tools/cleanhome.js uninstall        CleanHome vom TV entfernen
+ *   node tools/cleanhome.js apps             App-Namen und IDs anzeigen (für custom-icons/)
  *   node tools/cleanhome.js renew            Developer-Mode-Sitzung verlängern (Beta, s. README)
  *   node tools/cleanhome.js status           zeigt, was gespeichert ist
  *
@@ -27,9 +28,12 @@ const crypto = require('crypto');
 const http = require('http');
 const https = require('https');
 const { spawnSync } = require('child_process');
+const { analyse } = require('./png');
+const { prepareWallpapers } = require('./assets');
 
 const ROOT = path.resolve(__dirname, '..');
 const APP_DIR = path.join(ROOT, 'app');
+const SERVICE_DIR = path.join(ROOT, 'service');
 const DIST = path.join(ROOT, 'dist');
 const STATE_DIR = path.join(os.homedir(), '.lg-cleanhome');
 const STATE_FILE = path.join(STATE_DIR, 'state.json');
@@ -149,6 +153,19 @@ function fetchIcon(url, host) {
   });
 }
 
+function slug(s) { return String(s).toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, ''); }
+
+// Eigene Icons: custom-icons/<App-ID oder App-Name>.png|.jpg, z. B. custom-icons/netflix.png
+function customIcons() {
+  const dir = path.join(ROOT, 'custom-icons');
+  if (!fs.existsSync(dir)) return [];
+  return fs.readdirSync(dir).filter((f) => /\.(png|jpe?g)$/i.test(f)).map((f) => {
+    const ext = /\.png$/i.test(f) ? '.png' : '.jpg';
+    const stem = f.replace(/\.(png|jpe?g)$/i, '');
+    return { file: path.join(dir, f), ext, key: /\./.test(stem) ? stem.toLowerCase() : slug(stem) };
+  }).filter((c) => fs.statSync(c.file).size < 2 * 1024 * 1024);
+}
+
 async function sync(host, opts) {
   const state = loadState();
   if (!host) host = state.host;
@@ -195,20 +212,40 @@ async function sync(host, opts) {
     fs.mkdirSync(artDir, { recursive: true });
     const apps = [];
     let withIcon = 0;
+    const customs = customIcons();
     for (const p of points.slice(0, 300)) {
-      let icon = null;
-      for (const url of [p.largeIcon, p.icon].filter(Boolean)) {
-        const got = await fetchIcon(url, host);
-        if (got) {
-          const name = crypto.createHash('sha256').update(p.id).digest('hex').slice(0, 16) + got.ext;
-          fs.writeFileSync(path.join(artDir, name), got.data);
-          icon = 'art/' + name; withIcon++;
-          break;
+      const title = String(p.title || p.id).slice(0, 48);
+      const base = crypto.createHash('sha256').update(p.id).digest('hex').slice(0, 16);
+      let icon = null, fill = false, bg = null;
+      const custom = customs.find((c) => c.key === p.id.toLowerCase() || c.key === slug(title));
+      if (custom) {
+        // Eigenes Bild aus custom-icons/: füllt immer die ganze Kachel.
+        const name = base + 'c' + custom.ext;
+        fs.copyFileSync(custom.file, path.join(artDir, name));
+        icon = 'art/' + name; fill = true; withIcon++;
+        const a = custom.ext === '.png' ? analyse(fs.readFileSync(custom.file)) : null;
+        bg = a && a.bg;
+      } else {
+        // Alle Icon-Varianten des TVs holen und die größte nehmen.
+        const urls = Object.keys(p).filter((k) => /icon/i.test(k) && !/recent/i.test(k) && typeof p[k] === 'string' && /^https?:/.test(p[k]))
+          .map((k) => p[k]).filter((u, i, a) => a.indexOf(u) === i);
+        let best = null;
+        for (const url of urls) {
+          const got = await fetchIcon(url, host);
+          if (!got) continue;
+          const a = got.ext === '.png' ? analyse(got.data) : { width: 0, height: 0, fill: true, bg: null };
+          if (!best || (a && a.width > best.a.width)) best = { got, a: a || { width: 0, fill: false, bg: null } };
+        }
+        if (best) {
+          const name = base + best.got.ext;
+          fs.writeFileSync(path.join(artDir, name), best.got.data);
+          icon = 'art/' + name; fill = !!best.a.fill; bg = best.a.bg; withIcon++;
         }
       }
-      const color = [p.bgColor, p.iconColor].find((c) => typeof c === 'string' && /^#[0-9A-Fa-f]{6}$/.test(c)) || null;
-      apps.push({ id: p.id, title: String(p.title || p.id).slice(0, 48), icon, color });
+      const color = bg || [p.bgColor, p.iconColor].find((c) => typeof c === 'string' && /^#[0-9A-Fa-f]{6}$/.test(c)) || null;
+      apps.push({ id: p.id, title, icon, fill, color, custom: !!custom });
     }
+    if (customs.length) say('  eigene Icons aus custom-icons/: ' + customs.length);
 
     const inv = { synced: new Date().toISOString(), apps, inputs, shortcuts };
     const js = '/* Erzeugt von tools/cleanhome.js am ' + inv.synced + '. Nur Daten. */\n' +
@@ -226,7 +263,16 @@ function build() {
   say('\n④ Baue das App-Paket …');
   fs.rmSync(DIST, { recursive: true, force: true });
   fs.mkdirSync(DIST, { recursive: true });
-  if (ares('ares-package', [APP_DIR, '-o', DIST, '--no-minify']) === null) fail('Paket konnte nicht gebaut werden.');
+  say('  Hintergrundbilder: ' + prepareWallpapers());
+  // Dienst für die Home-Taste: Kopplungsschlüssel und die WebSocket-Bibliothek mitgeben.
+  const st = loadState();
+  fs.writeFileSync(path.join(SERVICE_DIR, 'config.json'), JSON.stringify({ host: st.host || null, clientKey: st.clientKey || null }));
+  const wsSrc = path.dirname(require.resolve('ws/package.json'));
+  const wsDst = path.join(SERVICE_DIR, 'node_modules', 'ws');
+  fs.rmSync(wsDst, { recursive: true, force: true });
+  fs.cpSync(wsSrc, wsDst, { recursive: true });
+  if (!st.clientKey) say('  (noch nicht gekoppelt: der Home-Tasten-Dienst bleibt inaktiv, bis setup/sync gelaufen ist)');
+  if (ares('ares-package', [APP_DIR, SERVICE_DIR, '-o', DIST, '--no-minify']) === null) fail('Paket konnte nicht gebaut werden.');
   const ipk = fs.readdirSync(DIST).find((f) => f.endsWith('.ipk'));
   if (!ipk) fail('Kein .ipk erzeugt.');
   say('  ✓ ' + path.join('dist', ipk));
@@ -377,6 +423,13 @@ async function main() {
       if (ares('ares-install', ['--device', DEVICE, '--remove', APP_ID]) === null) fail('Entfernen fehlgeschlagen.');
       say('✓ CleanHome entfernt. Der TV ist wieder wie vorher.');
       break;
+    case 'apps': {
+      const txt = fs.readFileSync(path.join(APP_DIR, 'js', 'inventory.js'), 'utf8');
+      const inv = JSON.parse(txt.slice(txt.indexOf('=') + 1).trim().replace(/;$/, ''));
+      if (!inv.apps.length) say('Noch keine App-Liste. Erst setup oder sync ausführen.');
+      inv.apps.forEach((a) => say(a.title.padEnd(32) + a.id));
+      break;
+    }
     case 'renew':
       await renew();
       break;
@@ -389,7 +442,7 @@ async function main() {
       break;
     }
     default:
-      say(fs.readFileSync(__filename, 'utf8').split('\n').slice(2, 13).map((l) => l.replace(/^ \* ?/, '')).join('\n'));
+      say(fs.readFileSync(__filename, 'utf8').split('\n').slice(2, 14).map((l) => l.replace(/^ \* ?/, '')).join('\n'));
   }
 }
 

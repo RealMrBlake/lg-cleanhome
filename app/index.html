@@ -8,7 +8,10 @@
 <link rel="stylesheet" href="css/home.css">
 </head>
 <body>
+<div id="wall"></div>
+<div id="wall-shade"></div>
 <div id="glow"></div>
+<div id="wall-credit"></div>
 
 <header id="top">
   <div id="greeting">
@@ -16,9 +19,10 @@
     <div id="date"></div>
   </div>
   <nav id="actions">
-    <button class="pill focusable" data-action="inputs" id="btn-inputs"><span class="ic">⇥</span>Eingänge</button>
-    <button class="pill focusable" data-action="livetv" id="btn-livetv"><span class="ic">▣</span>Live-TV</button>
-    <button class="pill focusable" data-action="settings" id="btn-settings"><span class="ic">⚙</span>Einstellungen</button>
+    <button class="pill" data-action="inputs"><svg viewBox="0 0 24 24"><path d="M3 12h11M10 7l5 5-5 5M20 4v16"/></svg>Eingänge</button>
+    <button class="pill" data-action="livetv" id="btn-livetv"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M8 2l4 4 4-4"/></svg>Live-TV</button>
+    <button class="pill" data-action="settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/></svg>TV-Einstellungen</button>
+    <button class="pill icon-only" data-action="customize" aria-label="Anpassen"><svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg></button>
   </nav>
 </header>
 
@@ -34,6 +38,14 @@
   </section>
 </main>
 
+<section id="settings" class="hidden">
+  <div id="settings-head">
+    <div id="settings-title">Anpassen</div>
+    <div id="settings-help">OK schaltet um · Zurück schließt</div>
+  </div>
+  <div id="settings-scroll"><div id="settings-list"></div></div>
+</section>
+
 <div id="overlay" class="hidden">
   <div id="sheet">
     <div id="sheet-title"></div>
@@ -44,9 +56,11 @@
 
 <div id="toast" class="hidden"></div>
 <div id="fade"></div>
-<div id="hint">OK lange drücken: Verschieben · Ins Dock · Ausblenden &nbsp;·&nbsp; Blaue Taste: App-Bibliothek</div>
+<div id="hint">OK lange drücken: Verschieben · Ins Dock · Ausblenden &nbsp;·&nbsp; Blaue Taste: Anpassen</div>
 
 <script src="js/inventory.js"></script>
+<script src="js/brands.js"></script>
+<script src="js/wallpapers.js"></script>
 <script src="js/home.js"></script>
 </body>
 </html>

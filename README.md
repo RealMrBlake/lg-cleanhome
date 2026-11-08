@@ -2,19 +2,19 @@
 
 Ein ruhiger, dunkler Startbildschirm für deinen **LG OLED55B39LA (webOS 25)**, angelehnt an
 [cleanyourtv](https://github.com/Gathin23/cleanyourtv): deine Apps im Dock, alle übrigen in einem Raster,
-Eingänge und Einstellungen als Knöpfe, Uhr und Datum. Keine Werbezeilen, keine Empfehlungen,
+Eingänge und Einstellungen als Knöpfe, Uhr und Datum, Hintergrundbilder, eigene Kacheln für bekannte Apps
+und ein „Anpassen“-Bildschirm zum Ein- und Ausblenden. Keine Werbezeilen, keine Empfehlungen,
 **keine Netzwerkverbindungen** (in der App per Content-Security-Policy gesperrt).
 
-> **Ehrlich vorweg:** Das Original-Projekt läuft nur auf Android-TVs. Auf webOS gibt es ohne Root kein
-> „Apps deaktivieren“ und man kann die **Home-Taste nicht umbelegen**. CleanHome ist deshalb eine App,
-> die du statt LGs Home benutzt (z. B. über eine Zifferntaste). Das Wichtigste gegen die Datensammelei
-> sind die Einstellungen in **[DATENSCHUTZ.md](DATENSCHUTZ.md)**. Die solltest du in jedem Fall machen.
+> **Vorweg:** Das Original-Projekt läuft nur auf Android-TVs. Auf webOS gibt es ohne Root kein
+> „Apps deaktivieren“. Die Home-Taste leitet ein kleiner Dienst auf dem TV um (siehe unten). Das Wichtigste
+> gegen die Datensammelei sind die Einstellungen in **[DATENSCHUTZ.md](DATENSCHUTZ.md)**.
 
-| Home | Alle Apps | Kachel-Menü | Eingänge |
+| Home mit Hintergrund | Alle Apps | Anpassen | Apps ein-/ausblenden |
 |---|---|---|---|
-| ![](preview/1-home.png) | ![](preview/3-grid.png) | ![](preview/4-menu.png) | ![](preview/5-inputs.png) |
+| ![](preview/1-home.png) | ![](preview/3-grid.png) | ![](preview/6-anpassen.png) | ![](preview/7-apps.png) |
 
-*Browser-Vorschau mit Beispieldaten. Auf dem TV erscheinen die echten Icons deiner Apps.*
+*Browser-Vorschau mit Beispieldaten.*
 
 ## Was du brauchst
 
@@ -56,9 +56,9 @@ node tools/cleanhome.js setup 192.168.178.40
 
 **3. Am TV: CleanHome bequem erreichbar machen**
 
+- **Home-Taste:** Ist CleanHome einmal geöffnet worden, führt die Home-Taste zu CleanHome (siehe unten).
 - **Schnellzugriff:** CleanHome öffnen, dann eine **Zifferntaste (z. B. 1) lange drücken** und „Registrieren“
-  wählen. Ab dann öffnet langes Drücken von 1 immer CleanHome.
-- In LGs App-Leiste CleanHome ganz nach vorn schieben (Home → „Bearbeiten“).
+  wählen. Ab dann öffnet langes Drücken von 1 immer CleanHome. Praktisch nach einem Neustart des TVs.
 - Unter *Einstellungen → Allgemein → System → Zusätzliche Einstellungen → Home-Einstellungen* die
   **automatische Anzeige von Home beim Einschalten** und **Home-Promotion** ausschalten.
   (Bezeichnungen können je nach Firmware leicht abweichen.)
@@ -69,11 +69,42 @@ node tools/cleanhome.js setup 192.168.178.40
 |---|---|
 | Pfeile, OK | bewegen, App öffnen |
 | **OK lang drücken** (oder rote Taste) | Kachel-Menü: *Verschieben*, *Ins Dock / Aus dem Dock*, *Ausblenden* |
-| **Blaue Taste** oder Kachel „+ Apps“ | App-Bibliothek: ausgeblendete Apps zurückholen |
+| **Blaue Taste**, Regler-Knopf oben rechts oder Kachel „Apps verwalten“ | **Anpassen** (siehe unten) |
 | Zurück | schließt Menüs, aus dem Raster zurück zum Dock. CleanHome schließt sich nie selbst. |
 | Magic-Remote-Zeiger | zeigen = fokussieren, klicken = öffnen |
 
 Die Anordnung speichert CleanHome auf dem TV. Ausblenden deinstalliert nichts.
+
+## Anpassen
+
+- **Apps:** jede installierte App mit zwei Schaltern, *Sichtbar / Ausgeblendet* und *Im Dock / Nicht im Dock*
+  (mit ◀ ▶ zwischen den Schaltern wechseln, OK schaltet um). Ausblenden deinstalliert nichts.
+- **Home-Taste öffnet CleanHome:** an/aus, mit Statusanzeige des Dienstes.
+- **Hintergrund:** aus, stündlich wechselnd oder ein festes Bild (◀ ▶ blättert).
+- **Markenkacheln:** eigene Kacheln in Markenfarbe für bekannte Apps (Netflix, YouTube, Prime Video, Disney+,
+  Emby, Plex, Jellyfin, Crunchyroll, Paramount+, DAZN, ARD, ZDF und weitere, siehe `app/js/brands.js`).
+  Aus = die Icons vom TV.
+- **Anordnung zurücksetzen.**
+
+## Home-Taste
+
+Ein kleiner Dienst, der mit CleanHome installiert wird (`service/`), schaut, welche App vorne ist. Erscheint
+LGs Home, öffnet er sofort CleanHome. Für einen Moment ist LGs Home dabei zu sehen.
+
+- **Notausgang:** Drückst du Home, *während CleanHome offen ist*, bleibt LGs Home stehen. So kommst du
+  jederzeit an LGs eigene Menüs.
+- **Nach einem kompletten Neustart** des TVs (Stromstecker, Update) läuft der Dienst erst wieder, wenn
+  CleanHome einmal geöffnet wurde, z. B. über die Schnellzugriffs-Zifferntaste. Aus dem Standby heraus läuft er weiter.
+- Abschalten: *Anpassen → Home-Taste öffnet CleanHome → Aus.*
+- Der Dienst nutzt die Steuerschnittstelle des TVs mit dem Kopplungsschlüssel aus `setup` und liest nur,
+  welche App vorne ist. Er macht keine Verbindungen ins Internet.
+
+## Eigene Icons und Hintergründe
+
+- **Icons:** Bilder in [`custom-icons/`](custom-icons/README.md) legen (Dateiname = App-Name), dann
+  `node tools/cleanhome.js sync`. Sie füllen die ganze Kachel und haben Vorrang vor allem anderen.
+- **Hintergründe:** JPG/PNG in [`wallpapers/`](wallpapers/README.md) legen, dann `node tools/cleanhome.js install`.
+  Mitgeliefert sind 12 frei lizenzierte Bilder (NASA-Aufnahmen, Landschaften, Illustrationen), Nachweise dort.
 
 ## Wichtig: Developer Mode läuft ab
 
@@ -97,6 +128,7 @@ node tools/cleanhome.js renew
 | Befehl | Wozu |
 |---|---|
 | `node tools/cleanhome.js connect` | Nur Developer-Mode-Verbindung einrichten und installieren (z. B. wenn `setup` bei Schritt 5 abbrach). |
+| `node tools/cleanhome.js apps` | App-Namen und IDs anzeigen (für `custom-icons/`). |
 | `node tools/cleanhome.js sync` | Neue App installiert? Liste und Icons neu holen und CleanHome aktualisieren. |
 | `node tools/cleanhome.js uninstall` | CleanHome entfernen. Der TV ist danach wie vorher. |
 | `node tools/cleanhome.js status` | Zeigt gekoppelten TV und Stand der App-Liste. |
@@ -111,9 +143,8 @@ node tools/cleanhome.js renew
 
 ## Grenzen
 
-- Die **Home-Taste** öffnet weiterhin LGs Home. Ohne Root lässt sich das nicht sauber ändern.
-  Andere Projekte überwachen dafür das Vordergrund-Programm und schalten zurück; das ist fehleranfällig,
-  daher bewusst weggelassen.
+- Die **Home-Taste** wird nicht abgefangen, sondern umgeleitet: LGs Home blitzt kurz auf. Ohne Root geht es
+  nicht sauberer.
 - Neu installierte Apps erscheinen erst nach `sync` (webOS 25 gibt Developer-Mode-Apps die App-Liste nicht
   heraus; CleanHome fragt trotzdem bei jedem Start einmal nach und nutzt sie, falls doch).
 - LGs eigene Werbeflächen in anderen Menüs (Einstellungen, Eingangsauswahl) bleiben. Dagegen hilft
@@ -124,8 +155,12 @@ node tools/cleanhome.js renew
 ```
 app/                 die TV-App (HTML/CSS/JS, keine Abhängigkeiten)
   appinfo.json       App-ID io.cleanhome.tv, Luna-Recht nur zum Starten von Apps
-  js/home.js         Oberfläche, Navigation, Starten
+  js/home.js         Oberfläche, Navigation, Anpassen, Starten
+  js/brands.js       Markenkacheln (Farbe + Schrift, keine Logos)
   js/inventory.js    App-Liste deines TVs (wird von setup/sync erzeugt)
-tools/cleanhome.js   Kopplung, App-Liste lesen, bauen, installieren
+service/             Dienst auf dem TV, der die Home-Taste zu CleanHome umleitet
+custom-icons/        eigene App-Icons (optional)
+wallpapers/          Hintergrundbilder
+tools/cleanhome.js   Kopplung, App-Liste und Icons lesen, bauen, installieren
 preview/             Browser-Vorschau mit Beispieldaten
 ```
