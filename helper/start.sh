@@ -8,6 +8,10 @@ case "$1" in
   *'"enabled":false'*|*'"enabled": false'*) echo off > /tmp/cleanhome-watch.off ;;
   *'"enabled":true'*|*'"enabled": true'*) rm -f /tmp/cleanhome-watch.off ;;
 esac
+case "$1" in
+  *'"wake":false'*|*'"wake": false'*) echo off > /tmp/cleanhome-wake.off ;;
+  *'"wake":true'*|*'"wake": true'*) rm -f /tmp/cleanhome-wake.off ;;
+esac
 
 PID=$(cat /tmp/cleanhome-watch.pid 2>/dev/null)
 if [ -n "$PID" ] && kill -0 "$PID" 2>/dev/null; then exit 0; fi

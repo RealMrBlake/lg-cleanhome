@@ -20,6 +20,10 @@ var SELF = 'io.cleanhome.tv';
 var HOME_IDS = ['com.webos.app.home'];
 var PID_FILE = '/tmp/cleanhome-watch.pid';
 var OFF_FILE = '/tmp/cleanhome-watch.off';
+var WAKE_OFF_FILE = '/tmp/cleanhome-wake.off';
+// Womit der TV nach dem Einschalten startet; dann wird CleanHome geöffnet.
+var START_IDS = ['com.webos.app.home', 'com.webos.app.livetv', 'com.webos.app.channeltuning'];
+var WAKE_WINDOW_MS = 30000;   // so lange nach dem Aufwachen gilt die erste Vordergrund-App als „Startbild“
 
 var cfg = {};
 try { cfg = JSON.parse(fs.readFileSync(__dirname + '/config.json', 'utf8')); } catch (e) { cfg = {}; }
@@ -37,6 +41,21 @@ process.on('exit', function () { try { if (fs.readFileSync(PID_FILE, 'utf8') ===
 
 var socket = null, retryTimer = null, backoff = 2000;
 var prevApp = null, lastRedirect = 0, msgId = 0, redirects = 0;
+var wokeAt = 0, lastTick = Date.now(), closedAt = 0;
+
+function wakeEnabled() { return !fs.existsSync(WAKE_OFF_FILE); }
+
+// Standby erkennen: Während der TV schläft, steht der Prozess still. Ein großer Sprung zwischen zwei
+// Takten heißt also „gerade aufgewacht“. Dann die Verbindung neu aufbauen (sie ist oft tot).
+setInterval(function () {
+  var now = Date.now();
+  if (now - lastTick > 20000) {
+    log('Aufwachen erkannt (' + Math.round((now - lastTick) / 1000) + ' s Pause)');
+    wokeAt = now;
+    if (socket) { try { socket.terminate(); } catch (e) { /* egal */ } }
+  }
+  lastTick = now;
+}, 3000);
 
 function enabled() { return !fs.existsSync(OFF_FILE); }
 
@@ -65,6 +84,15 @@ function onForeground(appId) {
   if (!appId) return;   // direkt nach einem Start ist die Angabe kurz leer
   var wasSelf = prevApp === SELF;
   prevApp = appId;
+  if (wokeAt && Date.now() - wokeAt < WAKE_WINDOW_MS) {
+    wokeAt = 0;
+    if (appId !== SELF && START_IDS.indexOf(appId) >= 0 && enabled() && wakeEnabled()) {
+      lastRedirect = Date.now();
+      log('Eingeschaltet mit ' + appId + ', öffne CleanHome');
+      send('request', 'ssap://system.launcher/launch', { id: SELF });
+      return;
+    }
+  }
   if (HOME_IDS.indexOf(appId) < 0) return;
   if (!enabled()) return;
   if (wasSelf) { log('Home aus CleanHome heraus: LG Home bleibt'); return; }
@@ -102,6 +130,9 @@ function connect(index) {
       }
       backoff = 2000;
       prevApp = null;
+      // Lange getrennt (TV war aus, Netzwerk weg): auch das als Aufwachen werten.
+      if (closedAt && Date.now() - closedAt > 20000) wokeAt = Date.now();
+      closedAt = 0;
       subId = send('subscribe', 'ssap://com.webos.applicationManager/getForegroundAppInfo', {});
       log('verbunden mit ' + host);
     } else if (m.type === 'error') {
@@ -113,6 +144,7 @@ function connect(index) {
   ws.on('error', function (e) { log('Verbindungsfehler: ' + String(e && e.message || e).slice(0, 200)); });
   ws.on('close', function () {
     if (socket === ws) socket = null;
+    closedAt = Date.now();
     retry((index || 0) + 1);
   });
 }

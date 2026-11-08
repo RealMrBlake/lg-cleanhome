@@ -68,7 +68,7 @@
   var ID_RE = /^[A-Za-z0-9][A-Za-z0-9._+-]{0,127}$/;
   var apps = {};       // id -> {id, title, icon, fill, custom, color, brand}
   var layout = null;   // {dock:[], order:[], hidden:[], settings:{}}
-  var DEFAULT_SETTINGS = { home: true, brand: true, wallpaper: 'auto' };
+  var DEFAULT_SETTINGS = { home: true, wake: true, brand: true, wallpaper: 'auto' };
 
   function brandFor(title) {
     for (var i = 0; i < BRANDS.length; i++) if (BRANDS[i].match.test(title)) return BRANDS[i];
@@ -305,7 +305,7 @@
   // Startet den Home-Wächter über die unsichtbare Helper-App (falls er nicht schon läuft)
   // und teilt ihm mit, ob die Umleitung an oder aus sein soll.
   function startHomeService(cb) {
-    luna('luna://com.webos.applicationManager/launch', { id: HELPER_ID, params: { enabled: !!layout.settings.home } }, function (err) {
+    luna('luna://com.webos.applicationManager/launch', { id: HELPER_ID, params: { enabled: !!layout.settings.home, wake: !!layout.settings.wake } }, function (err) {
       homeStatus = err ? { error: err.message } : { ok: true };
       if (cb) cb();
     }, 8000);
@@ -373,6 +373,8 @@
     srows.push({ type: 'head', label: 'Allgemein' });
     srows.push({ type: 'toggle', label: 'Home-Taste öffnet CleanHome', sub: homeStatusText, value: function () { return layout.settings.home; },
       run: function () { layout.settings.home = !layout.settings.home; saveLayout(); homeStatus = null; startHomeService(renderSettings); } });
+    srows.push({ type: 'toggle', label: 'Beim Einschalten CleanHome öffnen', sub: function () { return 'Statt Live-TV oder LGs Home. Ein HDMI-Eingang, auf dem der TV startet, bleibt.'; },
+      value: function () { return layout.settings.wake; }, run: function () { layout.settings.wake = !layout.settings.wake; saveLayout(); startHomeService(renderSettings); } });
     srows.push({ type: 'choice', label: 'Hintergrund', sub: function () { var c = currentWall(); return c && !c.own && layout.settings.wallpaper !== 'auto' ? c.credit : (WALLS.length ? 'OK oder ◀ ▶ zum Wechseln' : 'Keine Bilder vorhanden'); }, value: wallLabel,
       run: function (dir) { cycleWallpaper(dir || 1); } });
     srows.push({ type: 'toggle', label: 'Markenkacheln für bekannte Apps', sub: function () { return 'Eigene Kacheln statt der Icons vom TV (Netflix, YouTube, Emby …)'; },

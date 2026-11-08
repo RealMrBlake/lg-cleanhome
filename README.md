@@ -95,6 +95,10 @@ LGs Home, öffnet er sofort CleanHome. Für einen Moment ist LGs Home dabei zu s
   jederzeit an LGs eigene Menüs.
 - **Wer startet ihn?** `install`/`setup` starten ihn direkt. Außerdem startet CleanHome ihn bei jedem Öffnen
   über die unsichtbare App „CleanHome Helper“ (`helper/`), falls er nicht läuft.
+- **Beim Einschalten** (aus dem Standby) öffnet der Wächter CleanHome, wenn der TV mit Live-TV oder LGs Home
+  startet. Startet er auf einem HDMI-Eingang, bleibt der. Abschaltbar unter *Anpassen → Beim Einschalten
+  CleanHome öffnen*. Dafür muss **Quick Start+** an sein (*Einstellungen → Allgemein → Geräte → TV-Verwaltung*,
+  Name je nach Firmware), sonst ist jedes Ausschalten ein kompletter Neustart.
 - **Nach einem kompletten Neustart** des TVs (Stromstecker, Update) läuft er erst wieder, wenn CleanHome
   einmal geöffnet wurde, z. B. über die Schnellzugriffs-Zifferntaste. Aus dem Standby heraus läuft er weiter.
 - Abschalten: *Anpassen → Home-Taste öffnet CleanHome → Aus.*
