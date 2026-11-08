@@ -312,7 +312,7 @@ async function diag() {
     'ls -la ' + D + ' 2>&1',
     'grep -o \'"host":"[^"]*"\' ' + D + '/config.json 2>&1',
     'node -v 2>&1',
-    'P=$(cat /tmp/cleanhome-watch.pid 2>/dev/null); echo "pid=$P"; [ -n "$P" ] && kill -0 $P 2>/dev/null && echo "Wächter läuft" || echo "Wächter läuft NICHT"; [ -f /tmp/cleanhome-watch.off ] && echo "abgeschaltet (Anpassen)"',
+    'P=$(cat /tmp/cleanhome-watch.pid 2>/dev/null); echo "pid=$P"; [ -n "$P" ] && kill -0 $P 2>/dev/null && echo "Wächter läuft" || echo "Wächter läuft NICHT"; [ -f /tmp/cleanhome-watch.off ] && echo "abgeschaltet (Anpassen)"; true',
     'tail -n 25 /tmp/cleanhome-watch.log 2>&1',
     'cd ' + D + ' && timeout 12 node selftest.js 2>&1; echo "exit=$?"'
   ];
