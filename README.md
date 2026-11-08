@@ -144,6 +144,7 @@ node tools/cleanhome.js renew
 | `node tools/cleanhome.js connect` | Nur Developer-Mode-Verbindung einrichten und installieren (z. B. wenn `setup` bei Schritt 5 abbrach). |
 | `node tools/cleanhome.js diag --kurz` | Fehlersuche für die Home-Umleitung. |
 | `node tools/cleanhome.js apps` | App-Namen und IDs anzeigen (für `custom-icons/`). |
+| `node tools/cleanhome.js sync --neu-koppeln` | Kopplung komplett neu (Abfrage am TV bestätigen), falls der TV zu wenige Apps liefert. |
 | `node tools/cleanhome.js sync` | Neue App installiert? Liste und Icons neu holen und CleanHome aktualisieren. |
 | `node tools/cleanhome.js uninstall` | CleanHome entfernen. Der TV ist danach wie vorher. |
 | `node tools/cleanhome.js status` | Zeigt gekoppelten TV und Stand der App-Liste. |

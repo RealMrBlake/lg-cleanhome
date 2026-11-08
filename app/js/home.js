@@ -110,15 +110,24 @@
   }
 
   function reconcile() {
-    // Entfernte Apps vergessen, neue Apps hinten anhängen.
-    function keep(id) { return !!apps[id]; }
-    layout.dock = uniq(layout.dock.filter(keep)).slice(0, DOCK_MAX);
-    layout.hidden = uniq(layout.hidden.filter(keep));
-    layout.order = uniq(layout.order.filter(keep));
+    // Neue Apps hinten anhängen. Fehlende Apps NICHT vergessen: Sie werden nur nicht angezeigt.
+    // So überlebt die Anordnung, falls der TV einmal eine unvollständige App-Liste liefert.
+    layout.dock = uniq(layout.dock);
+    layout.hidden = uniq(layout.hidden);
+    layout.order = uniq(layout.order);
     var ids = sortedIds();
     for (var i = 0; i < ids.length; i++) if (layout.order.indexOf(ids[i]) < 0) layout.order.push(ids[i]);
-    if (!layout.dock.length && !layout.hidden.length) layout.dock = ids.slice(0, 5);
+    if (!layout.dock.length && !layout.hidden.length) {
+      // Leeres Dock: bekannte Streaming-Apps zuerst, sonst die ersten Apps.
+      PREFERRED_DOCK.forEach(function (re) {
+        if (layout.dock.length >= 5) return;
+        for (var i = 0; i < ids.length; i++) if (re.test(apps[ids[i]].title) && layout.dock.indexOf(ids[i]) < 0) { layout.dock.push(ids[i]); break; }
+      });
+      if (!layout.dock.length) layout.dock = ids.slice(0, 5);
+    }
   }
+  function exists(id) { return !!apps[id]; }
+  function dockIds() { return layout.dock.filter(exists).slice(0, DOCK_MAX); }
 
   function saveLayout() {
     try { localStorage.setItem(STORE_KEY, JSON.stringify(layout)); } catch (e) { /* voll oder gesperrt */ }
@@ -126,7 +135,7 @@
 
   function uniq(a) { var s = {}, o = []; for (var i = 0; i < a.length; i++) if (!s[a[i]]) { s[a[i]] = 1; o.push(a[i]); } return o; }
   function gridIds() {
-    return layout.order.filter(function (id) { return layout.dock.indexOf(id) < 0 && layout.hidden.indexOf(id) < 0; });
+    return layout.order.filter(function (id) { return exists(id) && layout.dock.indexOf(id) < 0 && layout.hidden.indexOf(id) < 0; });
   }
   function isHidden(id) { return layout.hidden.indexOf(id) >= 0; }
   function inDock(id) { return layout.dock.indexOf(id) >= 0; }
@@ -139,7 +148,7 @@
   function setDock(id, on) {
     var d = layout.dock.indexOf(id);
     if (on && d < 0) {
-      if (layout.dock.length >= DOCK_MAX) { toast('Das Dock ist voll (' + DOCK_MAX + ' Apps)'); return false; }
+      if (dockIds().length >= DOCK_MAX) { toast('Das Dock ist voll (' + DOCK_MAX + ' Apps)'); return false; }
       setHidden(id, false); layout.dock.push(id);
     }
     if (!on && d >= 0) layout.dock.splice(d, 1);
@@ -213,7 +222,7 @@
   function render() {
     var dock = $('dock'), grid = $('grid');
     dock.textContent = ''; grid.textContent = '';
-    layout.dock.forEach(function (id, i) { dock.appendChild(tileEl(apps[id], 'dock', i)); });
+    dockIds().forEach(function (id, i) { dock.appendChild(tileEl(apps[id], 'dock', i)); });
     var g = gridIds();
     g.forEach(function (id, i) { grid.appendChild(tileEl(apps[id], 'grid', i)); });
     grid.appendChild(tileEl(null, 'grid', g.length));   // „Apps verwalten“ öffnet Anpassen
@@ -268,7 +277,7 @@
   }
 
   function focusedId() {
-    if (focus.zone === 'dock') return layout.dock[focus.index];
+    if (focus.zone === 'dock') return dockIds()[focus.index];
     if (focus.zone === 'grid') return gridIds()[focus.index];
     return null;
   }
@@ -513,7 +522,7 @@
     if (focus.zone === 'actions') {
       if (dir === 'left') focus.index = Math.max(0, focus.index - 1);
       else if (dir === 'right') focus.index = Math.min(n - 1, focus.index + 1);
-      else if (dir === 'down') { focus.zone = layout.dock.length ? 'dock' : 'grid'; focus.index = 0; }
+      else if (dir === 'down') { focus.zone = dockIds().length ? 'dock' : 'grid'; focus.index = 0; }
     } else if (focus.zone === 'dock') {
       if (dir === 'left') focus.index = Math.max(0, focus.index - 1);
       else if (dir === 'right') focus.index = Math.min(n - 1, focus.index + 1);
@@ -527,7 +536,7 @@
       else if (dir === 'down' && Math.floor(i / COLS) < Math.floor((n - 1) / COLS)) i = n - 1;
       else if (dir === 'up') {
         if (i - COLS >= 0) i -= COLS;
-        else { focus.zone = layout.dock.length ? 'dock' : 'actions'; focus.index = Math.min(i, zoneEls(focus.zone).length - 1); applyFocus(); return; }
+        else { focus.zone = dockIds().length ? 'dock' : 'actions'; focus.index = Math.min(i, zoneEls(focus.zone).length - 1); applyFocus(); return; }
       }
       focus.index = i;
     }
@@ -536,7 +545,7 @@
 
   function moveTile(dir) {
     var list = moving.zone === 'dock' ? layout.dock : layout.order;
-    var visible = moving.zone === 'dock' ? layout.dock : gridIds();
+    var visible = moving.zone === 'dock' ? dockIds() : gridIds();
     var from = visible.indexOf(moving.id);
     var step = { left: -1, right: 1, up: moving.zone === 'grid' ? -COLS : 0, down: moving.zone === 'grid' ? COLS : 0 }[dir];
     var to = Math.max(0, Math.min(visible.length - 1, from + step));
@@ -547,7 +556,7 @@
     list.splice(b, 0, moving.id);
     saveLayout();
     render();
-    focus.index = (moving.zone === 'dock' ? layout.dock : gridIds()).indexOf(moving.id);
+    focus.index = (moving.zone === 'dock' ? dockIds() : gridIds()).indexOf(moving.id);
     applyFocus();
   }
 
@@ -568,7 +577,7 @@
     var zone = focus.zone;
     var items = [{ label: 'Verschieben', meta: 'Pfeile, dann OK', run: function () { moving = { zone: zone, id: a.id }; applyFocus(); } }];
     if (zone === 'dock') items.push({ label: 'Aus dem Dock nehmen', run: function () { setDock(a.id, false); saveLayout(); render(); } });
-    else items.push({ label: 'Ins Dock legen', meta: layout.dock.length >= DOCK_MAX ? 'Dock ist voll' : '', run: function () { if (setDock(a.id, true)) { saveLayout(); render(); } } });
+    else items.push({ label: 'Ins Dock legen', meta: dockIds().length >= DOCK_MAX ? 'Dock ist voll' : '', run: function () { if (setDock(a.id, true)) { saveLayout(); render(); } } });
     items.push({ label: 'Ausblenden', meta: 'bleibt installiert', run: function () {
       setHidden(a.id, true); saveLayout(); render(); toast('„' + a.title + '“ ausgeblendet · Anpassen holt es zurück');
     } });
@@ -580,7 +589,7 @@
     if (sheet) { closeSheet(); return; }
     if (view === 'settings') { closeSettings(); return; }
     if (moving) { moving = null; applyFocus(); return; }
-    if (focus.zone === 'grid') { focus.zone = layout.dock.length ? 'dock' : 'actions'; focus.index = 0; applyFocus(); return; }
+    if (focus.zone === 'grid') { focus.zone = dockIds().length ? 'dock' : 'actions'; focus.index = 0; applyFocus(); return; }
     // Auf Home tut Zurück nichts: der Launcher schließt sich nicht selbst.
   }
 
@@ -711,7 +720,7 @@
     saveLayout();
     if (!INV.shortcuts.livetv && hasBridge()) $('btn-livetv').classList.add('hidden');
     if (view === 'settings') { buildSettings(); renderSettings(); return; }
-    focus = { zone: layout.dock.length ? 'dock' : 'grid', index: 0 };
+    focus = { zone: dockIds().length ? 'dock' : 'grid', index: 0 };
     render();
   }
 

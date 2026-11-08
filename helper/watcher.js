@@ -172,7 +172,7 @@ function connect(index) {
   ws.on('open', function () {
     send('register', null, {
       forcePairing: false, pairingType: 'PROMPT', 'client-key': cfg.clientKey,
-      manifest: { manifestVersion: 1, appVersion: '1.0', permissions: ['LAUNCH', 'READ_INSTALLED_APPS', 'READ_RUNNING_APPS', 'READ_APP_STATUS', 'READ_INPUT_DEVICE_LIST', 'READ_POWER_STATE'] }
+      manifest: { manifestVersion: 1, appVersion: '1.0', permissions: ['LAUNCH', 'READ_INSTALLED_APPS', 'READ_RUNNING_APPS', 'READ_APP_STATUS', 'READ_INPUT_DEVICE_LIST'] }
     });
   });
   ws.on('message', function (raw) {
@@ -197,7 +197,7 @@ function connect(index) {
     var cb = pending[m.id];
     if (cb) { delete pending[m.id]; if (m.type !== 'error') cb(m); else log('Anfrage abgelehnt: ' + String(m.error).slice(0, 160)); return; }
     if (m.type === 'error') {
-      log((m.id === powerId ? 'Ein/Aus-Zustand nicht lesbar: ' : 'TV meldet Fehler: ') + String(m.error).slice(0, 200));
+      log((m.id === powerId ? 'Ein/Aus-Zustand nicht lesbar (nicht schlimm, Einschalten wird über die Verbindung erkannt): ' : 'TV meldet Fehler: ') + String(m.error).slice(0, 200));
     } else if (subId && m.id === subId && m.payload) {
       onForeground(m.payload.appId);
     } else if (powerId && m.id === powerId && m.payload) {

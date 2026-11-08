@@ -12,7 +12,7 @@ var t = setTimeout(function () { out('Zeitüberschreitung'); process.exit(2); },
 ws.on('open', function () {
   out('verbunden mit ' + cfg.host + ':3001');
   ws.send(JSON.stringify({ type: 'register', id: 'r1', payload: { forcePairing: false, pairingType: 'PROMPT', 'client-key': cfg.clientKey,
-    manifest: { manifestVersion: 1, appVersion: '1.0', permissions: ['LAUNCH', 'READ_INSTALLED_APPS', 'READ_RUNNING_APPS', 'READ_APP_STATUS', 'READ_INPUT_DEVICE_LIST', 'READ_POWER_STATE'] } } }));
+    manifest: { manifestVersion: 1, appVersion: '1.0', permissions: ['LAUNCH', 'READ_INSTALLED_APPS', 'READ_RUNNING_APPS', 'READ_APP_STATUS', 'READ_INPUT_DEVICE_LIST'] } } }));
 });
 ws.on('message', function (raw) {
   var m = JSON.parse(raw);

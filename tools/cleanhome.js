@@ -48,7 +48,7 @@ const HOST_RE = /^[A-Za-z0-9.-]{1,253}$/;
 const MANIFEST = {
   manifestVersion: 1,
   appVersion: '1.0',
-  permissions: ['LAUNCH', 'READ_INSTALLED_APPS', 'READ_RUNNING_APPS', 'READ_APP_STATUS', 'READ_INPUT_DEVICE_LIST', 'READ_POWER_STATE']
+  permissions: ['LAUNCH', 'READ_INSTALLED_APPS', 'READ_RUNNING_APPS', 'READ_APP_STATUS', 'READ_INPUT_DEVICE_LIST']
 };
 
 // ---------- Hilfen ----------
@@ -169,6 +169,13 @@ function customIcons() {
   }).filter((c) => fs.statSync(c.file).size < 2 * 1024 * 1024);
 }
 
+function previousAppCount() {
+  try {
+    const txt = fs.readFileSync(path.join(APP_DIR, 'js', 'inventory.js'), 'utf8');
+    return JSON.parse(txt.slice(txt.indexOf('=') + 1).trim().replace(/;$/, '')).apps.length;
+  } catch (e) { return 0; }
+}
+
 async function sync(host, opts) {
   const state = loadState();
   if (!host) host = state.host;
@@ -186,6 +193,14 @@ async function sync(host, opts) {
     say('② Lese App-Liste und Eingänge …');
     const lp = await tv.request('ssap://com.webos.applicationManager/listLaunchPoints');
     const points = (lp.launchPoints || []).filter((p) => p && ID_RE.test(p.id || '') && !p.hidden && p.id !== APP_ID);
+    // Schutz: Liefert der TV plötzlich viel weniger Apps als beim letzten Mal (z. B. während er
+    // einschläft oder die Kopplung eingeschränkt ist), die alte Liste behalten.
+    const prevCount = previousAppCount();
+    if (prevCount >= 5 && points.length < prevCount * 0.6 && !opts.force) {
+      say('  ⚠ Der TV meldet nur ' + points.length + ' Apps (letztes Mal ' + prevCount + '). Die bisherige Liste bleibt.');
+      say('    Ist der TV ganz eingeschaltet? Wenn du wirklich Apps entfernt hast: sync --erzwingen');
+      return;
+    }
     let allIds = new Set(points.map((p) => p.id));
     try {
       const la = await tv.request('ssap://com.webos.applicationManager/listApps');
@@ -433,7 +448,7 @@ function renew() {
 
 async function main() {
   const [cmd, arg, ...rest] = process.argv.slice(2);
-  const opts = { repair: rest.includes('--neu-koppeln') || arg === '--neu-koppeln' };
+  const opts = { repair: rest.includes('--neu-koppeln') || arg === '--neu-koppeln', force: rest.includes('--erzwingen') || arg === '--erzwingen' };
   const host = arg && !arg.startsWith('--') ? arg : undefined;
   switch (cmd) {
     case 'setup': {
